@@ -6,7 +6,7 @@
     <title>Live Map | TransPort</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Maps API -->
+    <!-- Google Maps API with your key -->
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAzmrPdW3tWTYF7pI2XU5XlLR_9RqCJ1cg"></script>
     <!-- Firebase Import Map -->
     <script type="importmap">
@@ -52,6 +52,9 @@
             <div class="map-container">
                 <div id="map"></div>
             </div>
+
+            <!-- Status Message (hidden by default) -->
+            <div id="statusMessage" style="margin-top: 15px; text-align: center; font-weight: 500; color: white;"></div>
         </main>
     </div>
 
@@ -59,14 +62,28 @@
         import { db } from './firebase-config.js';
         import { collection, query, where, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+        // DOM elements
+        const vehicleSelect = document.getElementById('vehicleSelect');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const statusDiv = document.getElementById('statusMessage');
+
         let map;
         let markers = [];
         let polylines = [];
 
-        // Initialize Google Map
+        // Helper to show status messages
+        function showStatus(msg, isError = false) {
+            statusDiv.textContent = msg;
+            statusDiv.style.color = isError ? '#f72585' : '#4cc9f0';
+            setTimeout(() => {
+                statusDiv.textContent = '';
+            }, 5000);
+        }
+
+        // Initialize Google Map (centered on Sri Lanka)
         function initMap() {
             map = new google.maps.Map(document.getElementById('map'), {
-                center: { lat: 7.8731, lng: 80.7718 }, // Sri Lanka
+                center: { lat: 7.8731, lng: 80.7718 },
                 zoom: 8,
                 styles: [
                     { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] }
@@ -79,24 +96,26 @@
 
         // Load vehicles into dropdown
         async function loadVehicles() {
-            const select = document.getElementById('vehicleSelect');
-            select.innerHTML = '<option value="">-- Select Vehicle --</option>';
-            
             try {
                 const snapshot = await getDocs(collection(db, "vehicles"));
+                vehicleSelect.innerHTML = '<option value="">-- Select Vehicle --</option>';
+                if (snapshot.empty) {
+                    showStatus("No vehicles found. Please add one first.", true);
+                }
                 snapshot.forEach(doc => {
                     const data = doc.data();
                     const option = document.createElement('option');
                     option.value = doc.id;
-                    option.textContent = `${data.plateNumber} (${data.ownerName})`;
-                    select.appendChild(option);
+                    option.textContent = `${data.plateNumber || 'No Plate'} (${data.ownerName || 'Unknown'})`;
+                    vehicleSelect.appendChild(option);
                 });
             } catch (error) {
                 console.error("Error loading vehicles:", error);
+                showStatus("Failed to load vehicles. Check Firestore rules.", true);
             }
         }
 
-        // Clear previous map overlays
+        // Clear map overlays
         function clearMap() {
             markers.forEach(m => m.setMap(null));
             polylines.forEach(p => p.setMap(null));
@@ -107,27 +126,36 @@
         // Fetch and display vehicle path
         async function showVehiclePath(vehicleId) {
             clearMap();
-
-            const locationsRef = collection(db, "locations");
-            const q = query(
-                locationsRef,
-                where("vehicleId", "==", vehicleId),
-                orderBy("timestamp", "asc"),
-                limit(100)
-            );
+            showStatus("Loading path...");
 
             try {
+                const locationsRef = collection(db, "locations");
+                const q = query(
+                    locationsRef,
+                    where("vehicleId", "==", vehicleId),
+                    orderBy("timestamp", "asc"),
+                    limit(100)
+                );
+
                 const snapshot = await getDocs(q);
+
                 if (snapshot.empty) {
-                    alert("No location data found for this vehicle.");
+                    showStatus("No location data found for this vehicle.", true);
                     return;
                 }
 
                 const path = [];
                 snapshot.forEach(doc => {
                     const data = doc.data();
-                    path.push({ lat: data.lat, lng: data.lng });
+                    if (data.lat && data.lng) {
+                        path.push({ lat: data.lat, lng: data.lng });
+                    }
                 });
+
+                if (path.length === 0) {
+                    showStatus("No valid coordinates found.", true);
+                    return;
+                }
 
                 // Draw polyline
                 const routePolyline = new google.maps.Polyline({
@@ -140,7 +168,7 @@
                 routePolyline.setMap(map);
                 polylines.push(routePolyline);
 
-                // Add start marker (green)
+                // Start marker (green)
                 const startMarker = new google.maps.Marker({
                     position: path[0],
                     map: map,
@@ -152,7 +180,7 @@
                 });
                 markers.push(startMarker);
 
-                // Add end marker (red)
+                // End marker (red)
                 const endMarker = new google.maps.Marker({
                     position: path[path.length - 1],
                     map: map,
@@ -164,19 +192,26 @@
                 });
                 markers.push(endMarker);
 
-                // Adjust map bounds to show entire path
+                // Fit bounds
                 const bounds = new google.maps.LatLngBounds();
                 path.forEach(p => bounds.extend(p));
                 map.fitBounds(bounds);
 
+                showStatus(`Path loaded: ${path.length} points.`);
             } catch (error) {
-                console.error("Error loading locations:", error);
-                alert("Error loading vehicle path.");
+                console.error("Error loading path:", error);
+                if (error.code === 'permission-denied') {
+                    showStatus("Permission denied. Check Firestore rules.", true);
+                } else if (error.code === 'failed-precondition') {
+                    showStatus("Missing index. Check console for link to create one.", true);
+                } else {
+                    showStatus("Error loading vehicle path. Check console.", true);
+                }
             }
         }
 
-        // Event Listeners
-        document.getElementById('vehicleSelect').addEventListener('change', (e) => {
+        // Event listeners
+        vehicleSelect.addEventListener('change', (e) => {
             if (e.target.value) {
                 showVehiclePath(e.target.value);
             } else {
@@ -186,16 +221,16 @@
             }
         });
 
-        document.getElementById('refreshBtn').addEventListener('click', () => {
-            const selected = document.getElementById('vehicleSelect').value;
+        refreshBtn.addEventListener('click', () => {
+            const selected = vehicleSelect.value;
             if (selected) {
                 showVehiclePath(selected);
             } else {
-                alert("Please select a vehicle first.");
+                showStatus("Please select a vehicle first.", true);
             }
         });
 
-        // Initialize on page load
+        // Initialize everything when page loads
         window.onload = async () => {
             initMap();
             await loadVehicles();
