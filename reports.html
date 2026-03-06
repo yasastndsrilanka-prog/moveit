@@ -39,6 +39,7 @@
     <script type="module">
         import { db } from './firebase-config.js';
         import { collection, query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { haversineDistance } from './app.js';
 
         // Haversine formula to calculate distance between two lat/lng points in km
         function haversineDistance(coord1, coord2) {
@@ -125,4 +126,5 @@
         };
     </script>
 </body>
+
 </html>
