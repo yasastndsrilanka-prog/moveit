@@ -1,4 +1,21 @@
 <!DOCTYPE html>
+<!-- Inside the main-content, after the top-bar -->
+<main class="main-content">
+    <div class="top-bar">
+        <h1 class="page-title"><i class="fas fa-map-marked-alt"></i> Live Tracking</h1>
+    </div>
+
+    <div class="controls-panel">
+        <select id="vehicleSelect">
+            <option value="">-- Select Vehicle --</option>
+        </select>
+        <button id="refreshBtn"><i class="fas fa-sync-alt"></i> Refresh</button>
+    </div>
+
+    <div class="map-container">
+        <div id="map"></div>
+    </div>
+</main>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -149,4 +166,5 @@
         };
     </script>
 </body>
+
 </html>
