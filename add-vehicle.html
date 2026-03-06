@@ -6,7 +6,6 @@
     <title>Add Vehicle</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Firebase Import Map -->
     <script type="importmap">
         {
             "imports": {
@@ -17,52 +16,51 @@
     </script>
 </head>
 <body>
-    <div class="container">
-        <!-- Navbar -->
-        <nav class="navbar">
-            <div class="navbar-brand">
-                <i class="fas fa-truck" style="font-size: 24px; color: #2563eb;"></i>
-                <h1>TransPort</h1>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <i class="fas fa-truck"></i>
+                <h2>TransPort</h2>
             </div>
-            <div class="navbar-menu">
-                <a href="index.html" class="nav-link"><i class="fas fa-home"></i> Home</a>
-                <a href="vehicles.html" class="nav-link"><i class="fas fa-truck"></i> Vehicles</a>
-                <a href="map.html" class="nav-link"><i class="fas fa-map-marked-alt"></i> Live Map</a>
-                <a href="reports.html" class="nav-link"><i class="fas fa-chart-bar"></i> Reports</a>
+            <nav class="sidebar-nav">
+                <a href="index.html"><i class="fas fa-home"></i><span>Dashboard</span></a>
+                <a href="vehicles.html" class="active"><i class="fas fa-truck"></i><span>Vehicles</span></a>
+                <a href="map.html"><i class="fas fa-map-marked-alt"></i><span>Live Map</span></a>
+                <a href="reports.html"><i class="fas fa-chart-bar"></i><span>Reports</span></a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <a href="vehicles.html" class="back-link"><i class="fas fa-arrow-left"></i> Back to Vehicles</a>
+
+            <div class="form-container">
+                <h2 style="color: white; margin-bottom: 24px;"><i class="fas fa-plus-circle"></i> Add New Vehicle</h2>
+                <form id="addVehicleForm">
+                    <div class="form-group">
+                        <label><i class="fas fa-id-card"></i> Plate Number *</label>
+                        <input type="text" id="plateNumber" placeholder="e.g., NP-1234" required>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-user"></i> Owner Name *</label>
+                        <input type="text" id="ownerName" placeholder="Full name" required>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-info-circle"></i> Status</label>
+                        <select id="status">
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="maintenance">Maintenance</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-odometer"></i> Initial Odometer (km)</label>
+                        <input type="number" id="currentOdometer" placeholder="e.g., 12500" min="0" step="0.1">
+                    </div>
+                    <button type="submit" class="btn-primary"><i class="fas fa-save"></i> Save Vehicle</button>
+                </form>
+                <div id="message" style="margin-top: 16px; text-align: center; font-weight: 500;"></div>
             </div>
-        </nav>
-
-        <a href="vehicles.html" class="back-link"><i class="fas fa-arrow-left"></i> Back to Vehicles</a>
-
-        <div class="map-container" style="max-width: 600px; margin: 20px auto;">
-            <h2><i class="fas fa-plus-circle"></i> Add New Vehicle</h2>
-            <form id="addVehicleForm" style="display: flex; flex-direction: column; gap: 15px; margin-top: 20px;">
-                <div style="display: flex; flex-direction: column; gap: 5px;">
-                    <label for="plateNumber" style="font-weight: 600;"><i class="fas fa-id-card"></i> Plate Number *</label>
-                    <input type="text" id="plateNumber" placeholder="e.g., NP-1234" required>
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 5px;">
-                    <label for="ownerName" style="font-weight: 600;"><i class="fas fa-user"></i> Owner Name *</label>
-                    <input type="text" id="ownerName" placeholder="Full name" required>
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 5px;">
-                    <label for="status" style="font-weight: 600;"><i class="fas fa-info-circle"></i> Status</label>
-                    <select id="status">
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
-                        <option value="maintenance">Maintenance</option>
-                    </select>
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 5px;">
-                    <label for="currentOdometer" style="font-weight: 600;"><i class="fas fa-odometer"></i> Initial Odometer (km)</label>
-                    <input type="number" id="currentOdometer" placeholder="e.g., 12500" min="0" step="0.1">
-                </div>
-                <button type="submit" style="background: linear-gradient(135deg, #2563eb, #10b981); font-size: 16px; padding: 15px;">
-                    <i class="fas fa-save"></i> Save Vehicle
-                </button>
-            </form>
-            <div id="message" style="margin-top: 15px; text-align: center; font-weight: 500;"></div>
-        </div>
+        </main>
     </div>
 
     <script type="module">
@@ -75,7 +73,6 @@
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            // Get form values
             const plateNumber = document.getElementById('plateNumber').value.trim();
             const ownerName = document.getElementById('ownerName').value.trim();
             const status = document.getElementById('status').value;
@@ -86,24 +83,23 @@
                 return;
             }
 
-            // Disable button to prevent double submission
-            const submitBtn = form.querySelector('button[type="submit"]');
+            const submitBtn = form.querySelector('button');
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
 
             try {
-                const docRef = await addDoc(collection(db, "vehicles"), {
-                    plateNumber: plateNumber,
-                    ownerName: ownerName,
-                    status: status,
-                    currentOdometer: currentOdometer,
-                    createdAt: new Date() // optional
+                await addDoc(collection(db, "vehicles"), {
+                    plateNumber,
+                    ownerName,
+                    status,
+                    currentOdometer,
+                    createdAt: new Date()
                 });
-                showMessage(`Vehicle added successfully! ID: ${docRef.id}`, 'success');
-                form.reset(); // clear form
+                showMessage('Vehicle added successfully!', 'success');
+                form.reset();
             } catch (error) {
                 console.error("Error adding vehicle: ", error);
-                showMessage('Error adding vehicle. Check console.', 'error');
+                showMessage('Error adding vehicle.', 'error');
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = '<i class="fas fa-save"></i> Save Vehicle';
@@ -112,7 +108,7 @@
 
         function showMessage(text, type) {
             messageDiv.textContent = text;
-            messageDiv.style.color = type === 'success' ? '#10b981' : '#ef4444';
+            messageDiv.style.color = type === 'success' ? '#4cc9f0' : '#f72585';
         }
     </script>
 </body>
