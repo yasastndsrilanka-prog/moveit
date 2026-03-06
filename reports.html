@@ -3,31 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monthly Mileage Report</title>
+    <title>Mileage Reports | TransPort</title>
     <link rel="stylesheet" href="style.css">
-</head>
-<body>
-    <div class="container">
-        <h1>📊 Monthly Mileage Report</h1>
-        <a href="index.html" class="back-link">← Back to Dashboard</a>
-
-        <div class="filters">
-            <label for="vehicleSelect">Vehicle:</label>
-            <select id="vehicleSelect" required>
-                <option value="">-- Select --</option>
-            </select>
-
-            <label for="monthSelect">Month:</label>
-            <input type="month" id="monthSelect" required>
-
-            <button id="calculateBtn">Calculate Mileage</button>
-        </div>
-
-        <div id="result" class="result-card" style="display: none;">
-            <h2>Total Distance: <span id="distanceValue">0</span> km</h2>
-        </div>
-    </div>
-
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Firebase Import Map -->
     <script type="importmap">
         {
             "imports": {
@@ -36,12 +15,68 @@
             }
         }
     </script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <i class="fas fa-truck"></i>
+                <h2>TransPort</h2>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="index.html"><i class="fas fa-home"></i><span>Dashboard</span></a>
+                <a href="vehicles.html"><i class="fas fa-truck"></i><span>Vehicles</span></a>
+                <a href="map.html"><i class="fas fa-map-marked-alt"></i><span>Live Map</span></a>
+                <a href="reports.html" class="active"><i class="fas fa-chart-bar"></i><span>Reports</span></a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="top-bar">
+                <h1 class="page-title"><i class="fas fa-chart-bar"></i> Monthly Mileage Reports</h1>
+            </div>
+
+            <!-- Report Container (glass card) -->
+            <div class="map-container" style="max-width: 700px; margin: 0 auto;">
+                <h2 style="color: white; margin-bottom: 24px;"><i class="fas fa-filter"></i> Select Vehicle & Month</h2>
+                
+                <!-- Controls Panel (compact) -->
+                <div class="controls-panel" style="display: flex; flex-direction: column; align-items: stretch; gap: 16px; background: transparent; border: none; padding: 0;">
+                    <select id="vehicleSelect" style="width: 100%;">
+                        <option value="">-- Choose Vehicle --</option>
+                    </select>
+                    
+                    <input type="month" id="monthSelect" style="width: 100%;" required>
+                    
+                    <button id="calculateBtn" class="btn-primary" style="width: 100%;">
+                        <i class="fas fa-calculator"></i> Calculate Mileage
+                    </button>
+                </div>
+
+                <!-- Result Card (initially hidden) -->
+                <div id="resultCard" class="stat-card" style="margin-top: 30px; display: none; background: rgba(255,255,255,0.2);">
+                    <div class="stat-icon" style="background: linear-gradient(135deg, #4cc9f0, #4361ee);">
+                        <i class="fas fa-road"></i>
+                    </div>
+                    <div class="stat-info">
+                        <h3 style="color: rgba(255,255,255,0.8);">Total Distance</h3>
+                        <p id="distanceValue" style="font-size: 36px;">0 km</p>
+                    </div>
+                </div>
+
+                <!-- Error / Info Message -->
+                <div id="message" style="margin-top: 16px; text-align: center; font-weight: 500; color: white;"></div>
+            </div>
+        </main>
+    </div>
+
     <script type="module">
         import { db } from './firebase-config.js';
         import { collection, query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { haversineDistance } from './app.js';
 
-        // Haversine formula to calculate distance between two lat/lng points in km
+        // ---------- Haversine Formula (distance between two lat/lng points in km) ----------
         function haversineDistance(coord1, coord2) {
             const R = 6371; // Earth radius in km
             const dLat = (coord2.lat - coord1.lat) * Math.PI / 180;
@@ -54,77 +89,119 @@
             return R * c;
         }
 
+        // DOM elements
+        const vehicleSelect = document.getElementById('vehicleSelect');
+        const monthSelect = document.getElementById('monthSelect');
+        const calculateBtn = document.getElementById('calculateBtn');
+        const resultCard = document.getElementById('resultCard');
+        const distanceSpan = document.getElementById('distanceValue');
+        const messageDiv = document.getElementById('message');
+
         // Load vehicles into dropdown
         async function loadVehicles() {
-            const snapshot = await getDocs(collection(db, "vehicles"));
-            const select = document.getElementById('vehicleSelect');
-            select.innerHTML = '<option value="">-- Select --</option>';
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                const option = document.createElement('option');
-                option.value = doc.id;
-                option.textContent = `${data.plateNumber} (${data.ownerName})`;
-                select.appendChild(option);
-            });
+            try {
+                const snapshot = await getDocs(collection(db, "vehicles"));
+                vehicleSelect.innerHTML = '<option value="">-- Choose Vehicle --</option>';
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const option = document.createElement('option');
+                    option.value = doc.id;
+                    option.textContent = `${data.plateNumber} (${data.ownerName})`;
+                    vehicleSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error("Error loading vehicles:", error);
+                showMessage("Failed to load vehicles.", "error");
+            }
         }
 
-        // Calculate total distance for selected vehicle and month
+        // Show temporary message
+        function showMessage(text, type = "info") {
+            messageDiv.textContent = text;
+            messageDiv.style.color = type === "error" ? "#f72585" : "#4cc9f0";
+            setTimeout(() => {
+                messageDiv.textContent = "";
+            }, 4000);
+        }
+
+        // Calculate mileage
         async function calculateMileage() {
-            const vehicleId = document.getElementById('vehicleSelect').value;
-            const monthStr = document.getElementById('monthSelect').value; // format YYYY-MM
+            const vehicleId = vehicleSelect.value;
+            const monthStr = monthSelect.value; // format YYYY-MM
+
             if (!vehicleId || !monthStr) {
-                alert("Please select both vehicle and month.");
+                showMessage("Please select both vehicle and month.", "error");
                 return;
             }
 
             // Parse month to date range
             const [year, month] = monthStr.split('-').map(Number);
-            const startDate = new Date(year, month-1, 1); // first day of month
-            const endDate = new Date(year, month, 1);    // first day of next month
+            const startDate = new Date(year, month - 1, 1); // first day of month
+            const endDate = new Date(year, month, 1);       // first day of next month
 
-            const locationsRef = collection(db, "locations");
-            const q = query(
-                locationsRef,
-                where("vehicleId", "==", vehicleId),
-                where("timestamp", ">=", startDate),
-                where("timestamp", "<", endDate),
-                orderBy("timestamp", "asc")
-            );
+            // Show loading on button
+            calculateBtn.disabled = true;
+            calculateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Calculating...';
+            resultCard.style.display = "none";
 
             try {
+                const locationsRef = collection(db, "locations");
+                const q = query(
+                    locationsRef,
+                    where("vehicleId", "==", vehicleId),
+                    where("timestamp", ">=", startDate),
+                    where("timestamp", "<", endDate),
+                    orderBy("timestamp", "asc")
+                );
+
                 const snapshot = await getDocs(q);
+
                 if (snapshot.empty) {
-                    alert("No location data for this period.");
+                    showMessage("No location data found for this period.", "error");
+                    calculateBtn.disabled = false;
+                    calculateBtn.innerHTML = '<i class="fas fa-calculator"></i> Calculate Mileage';
                     return;
                 }
 
                 let totalKm = 0;
                 let prevPoint = null;
+
                 snapshot.forEach(doc => {
                     const data = doc.data();
                     const currentPoint = { lat: data.lat, lng: data.lng };
+                    
+                    // Ensure timestamp is valid (optional, but good practice)
                     if (prevPoint) {
                         totalKm += haversineDistance(prevPoint, currentPoint);
                     }
                     prevPoint = currentPoint;
                 });
 
-                document.getElementById('distanceValue').textContent = totalKm.toFixed(2);
-                document.getElementById('result').style.display = 'block';
+                // Display result
+                distanceSpan.textContent = totalKm.toFixed(2) + " km";
+                resultCard.style.display = "flex"; // stat-card uses flex
+
             } catch (error) {
-                console.error("Error calculating mileage: ", error);
-                alert("Error calculating mileage.");
+                console.error("Error calculating mileage:", error);
+                showMessage("Error calculating mileage. Check console.", "error");
+            } finally {
+                calculateBtn.disabled = false;
+                calculateBtn.innerHTML = '<i class="fas fa-calculator"></i> Calculate Mileage';
             }
         }
 
-        // Event listeners
-        document.getElementById('calculateBtn').addEventListener('click', calculateMileage);
+        // Event listener
+        calculateBtn.addEventListener('click', calculateMileage);
 
         // Initialize on page load
-        window.onload = async () => {
-            await loadVehicles();
+        window.onload = () => {
+            loadVehicles();
+            // Set default month to current month
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            monthSelect.value = `${year}-${month}`;
         };
     </script>
 </body>
-
 </html>
