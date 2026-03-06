@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monthly Mileage Report</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Monthly Mileage Report</h1>
+        <a href="index.html" class="back-link">← Back to Dashboard</a>
+
+        <div class="filters">
+            <label for="vehicleSelect">Vehicle:</label>
+            <select id="vehicleSelect" required>
+                <option value="">-- Select --</option>
+            </select>
+
+            <label for="monthSelect">Month:</label>
+            <input type="month" id="monthSelect" required>
+
+            <button id="calculateBtn">Calculate Mileage</button>
+        </div>
+
+        <div id="result" class="result-card" style="display: none;">
+            <h2>Total Distance: <span id="distanceValue">0</span> km</h2>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+                "firebase/firestore": "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"
+            }
+        }
+    </script>
+    <script type="module">
+        import { db } from './firebase-config.js';
+        import { collection, query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // Haversine formula to calculate distance between two lat/lng points in km
+        function haversineDistance(coord1, coord2) {
+            const R = 6371; // Earth radius in km
+            const dLat = (coord2.lat - coord1.lat) * Math.PI / 180;
+            const dLon = (coord2.lng - coord1.lng) * Math.PI / 180;
+            const a = 
+                Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(coord1.lat * Math.PI / 180) * Math.cos(coord2.lat * Math.PI / 180) * 
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        // Load vehicles into dropdown
+        async function loadVehicles() {
+            const snapshot = await getDocs(collection(db, "vehicles"));
+            const select = document.getElementById('vehicleSelect');
+            select.innerHTML = '<option value="">-- Select --</option>';
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                const option = document.createElement('option');
+                option.value = doc.id;
+                option.textContent = `${data.plateNumber} (${data.ownerName})`;
+                select.appendChild(option);
+            });
+        }
+
+        // Calculate total distance for selected vehicle and month
+        async function calculateMileage() {
+            const vehicleId = document.getElementById('vehicleSelect').value;
+            const monthStr = document.getElementById('monthSelect').value; // format YYYY-MM
+            if (!vehicleId || !monthStr) {
+                alert("Please select both vehicle and month.");
+                return;
+            }
+
+            // Parse month to date range
+            const [year, month] = monthStr.split('-').map(Number);
+            const startDate = new Date(year, month-1, 1); // first day of month
+            const endDate = new Date(year, month, 1);    // first day of next month
+
+            const locationsRef = collection(db, "locations");
+            const q = query(
+                locationsRef,
+                where("vehicleId", "==", vehicleId),
+                where("timestamp", ">=", startDate),
+                where("timestamp", "<", endDate),
+                orderBy("timestamp", "asc")
+            );
+
+            try {
+                const snapshot = await getDocs(q);
+                if (snapshot.empty) {
+                    alert("No location data for this period.");
+                    return;
+                }
+
+                let totalKm = 0;
+                let prevPoint = null;
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const currentPoint = { lat: data.lat, lng: data.lng };
+                    if (prevPoint) {
+                        totalKm += haversineDistance(prevPoint, currentPoint);
+                    }
+                    prevPoint = currentPoint;
+                });
+
+                document.getElementById('distanceValue').textContent = totalKm.toFixed(2);
+                document.getElementById('result').style.display = 'block';
+            } catch (error) {
+                console.error("Error calculating mileage: ", error);
+                alert("Error calculating mileage.");
+            }
+        }
+
+        // Event listeners
+        document.getElementById('calculateBtn').addEventListener('click', calculateMileage);
+
+        // Initialize on page load
+        window.onload = async () => {
+            await loadVehicles();
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vehicles</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🚗 Vehicle List</h1>
+        <a href="index.html" class="back-link">← Back to Dashboard</a>
+        <div id="vehicle-list" class="vehicle-grid"></div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+                "firebase/firestore": "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"
+            }
+        }
+    </script>
+    <script type="module">
+        import { db } from './firebase-config.js';
+        import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        async function loadVehicles() {
+            const vehicleList = document.getElementById('vehicle-list');
+            try {
+                const querySnapshot = await getDocs(collection(db, "vehicles"));
+                if (querySnapshot.empty) {
+                    vehicleList.innerHTML = '<p>No vehicles found. Add one in Firebase Console.</p>';
+                    return;
+                }
+                let html = '';
+                querySnapshot.forEach(doc => {
+                    const v = doc.data();
+                    html += `
+                        <div class="vehicle-card">
+                            <h3>${v.plateNumber || 'No Plate'}</h3>
+                            <p><strong>Owner:</strong> ${v.ownerName || 'Unknown'}</p>
+                            <p><strong>Status:</strong> ${v.status || 'Active'}</p>
+                            <p><strong>Last Odometer:</strong> ${v.currentOdometer || 0} km</p>
+                        </div>
+                    `;
+                });
+                vehicleList.innerHTML = html;
+            } catch (error) {
+                console.error("Error loading vehicles: ", error);
+                vehicleList.innerHTML = '<p>Error loading vehicles.</p>';
+            }
+        }
+
+        loadVehicles();
+    </script>
+</body>
+</html>

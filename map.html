@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Vehicle Map</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        #map { height: 600px; width: 100%; margin-top: 20px; }
+        .controls { margin: 20px 0; display: flex; gap: 10px; align-items: center; }
+        select, button { padding: 8px; font-size: 16px; }
+    </style>
+    <!-- Google Maps API -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAzmrPdW3tWTYF7pI2XU5XlLR_9RqCJ1cg"></script>
+    <!-- Firebase Import Map -->
+    <script type="importmap">
+        {
+            "imports": {
+                "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+                "firebase/firestore": "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>🗺️ Live Vehicle Tracking</h1>
+        <a href="index.html" class="back-link">← Back to Dashboard</a>
+
+        <div class="controls">
+            <select id="vehicleSelect">
+                <option value="">-- Select Vehicle --</option>
+            </select>
+            <button id="refreshBtn">🔄 Refresh</button>
+        </div>
+        <div id="map"></div>
+    </div>
+
+    <script type="module">
+        import { db } from './firebase-config.js';
+        import { collection, query, where, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        let map;
+        let markers = [];
+        let polylines = [];
+
+        // Initialize map centered on Sri Lanka
+        function initMap() {
+            map = new google.maps.Map(document.getElementById('map'), {
+                center: { lat: 7.8731, lng: 80.7718 },
+                zoom: 8
+            });
+        }
+
+        // Load vehicles into dropdown
+        async function loadVehicles() {
+            const snapshot = await getDocs(collection(db, "vehicles"));
+            const select = document.getElementById('vehicleSelect');
+            select.innerHTML = '<option value="">-- Select Vehicle --</option>';
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                const option = document.createElement('option');
+                option.value = doc.id;
+                option.textContent = `${data.plateNumber} (${data.ownerName})`;
+                select.appendChild(option);
+            });
+        }
+
+        // Clear previous map overlays
+        function clearMap() {
+            markers.forEach(m => m.setMap(null));
+            polylines.forEach(p => p.setMap(null));
+            markers = [];
+            polylines = [];
+        }
+
+        // Fetch and draw path for selected vehicle
+        async function showVehiclePath(vehicleId) {
+            clearMap();
+
+            const locationsRef = collection(db, "locations");
+            const q = query(
+                locationsRef,
+                where("vehicleId", "==", vehicleId),
+                orderBy("timestamp", "asc"),
+                limit(100)
+            );
+            const snapshot = await getDocs(q);
+
+            if (snapshot.empty) {
+                alert("No location data for this vehicle.");
+                return;
+            }
+
+            const path = [];
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                // Convert Firestore timestamp to date if needed, but we just need lat/lng
+                path.push({ lat: data.lat, lng: data.lng });
+            });
+
+            // Draw polyline
+            const routePolyline = new google.maps.Polyline({
+                path: path,
+                geodesic: true,
+                strokeColor: "#FF0000",
+                strokeOpacity: 1.0,
+                strokeWeight: 3
+            });
+            routePolyline.setMap(map);
+            polylines.push(routePolyline);
+
+            // Add start and end markers
+            const startMarker = new google.maps.Marker({
+                position: path[0],
+                map: map,
+                title: "Start",
+                icon: "http://maps.google.com/mapfiles/ms/icons/green-dot.png"
+            });
+            const endMarker = new google.maps.Marker({
+                position: path[path.length-1],
+                map: map,
+                title: "Current",
+                icon: "http://maps.google.com/mapfiles/ms/icons/red-dot.png"
+            });
+            markers.push(startMarker, endMarker);
+
+            // Fit map to show whole path
+            const bounds = new google.maps.LatLngBounds();
+            path.forEach(p => bounds.extend(p));
+            map.fitBounds(bounds);
+        }
+
+        // Event listeners
+        document.getElementById('vehicleSelect').addEventListener('change', (e) => {
+            if (e.target.value) showVehiclePath(e.target.value);
+            else clearMap();
+        });
+
+        document.getElementById('refreshBtn').addEventListener('click', () => {
+            const selected = document.getElementById('vehicleSelect').value;
+            if (selected) showVehiclePath(selected);
+        });
+
+        // Initialize on page load
+        window.onload = async () => {
+            initMap();
+            await loadVehicles();
+        };
+    </script>
+</body>
+</html>
